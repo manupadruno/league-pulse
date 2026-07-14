@@ -72,13 +72,18 @@ puente, ver decisiones de diseño).
 - **`data/` fuera de git**: por privacidad, por peso del repositorio, y porque git no
   está diseñado para versionar datos que cambian constantemente.
 
+## Restricciones API gratuita
+
+- **competiciones disponibles**: La API gratuita de [football-data.org](https://www.football-data.org/) solo da acceso a las competiciones mas importantes.
+- **registro histórico**: La API gratuita de [football-data.org](https://www.football-data.org/) solo da acceso a los partidos de los últimos 3 años.
+
 ## Estado actual
 
 - [x] Modelado de entidades y relaciones.
 - [x] Entorno del proyecto (uv, estructura de carpetas, `.env`).
 - [x] `config.py` con carga de variables y fail-fast.
-- [ ] Extracción de datos (`extract.py`).
-- [ ] Persistencia de la capa raw (`raw.py`).
+- [x] Extracción de datos (`extract.py`).
+- [x] Persistencia de la capa raw (`raw.py`).
 - [ ] Transformación y carga a PostgreSQL.
 - [ ] Orquestación con Airflow.
 - [ ] Despliegue en AWS.
