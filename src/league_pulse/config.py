@@ -1,0 +1,15 @@
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+
+def require_env(name):
+    env_value = os.getenv(name)
+    if env_value is None:
+        raise ValueError(f"{name} is not set in the environment variables.")
+    return env_value
+
+
+API_TOKEN = require_env("FOOTBALL_DATA_API_TOKEN")
+BASE_URL = require_env("FOOTBALL_DATA_BASE_URL")
