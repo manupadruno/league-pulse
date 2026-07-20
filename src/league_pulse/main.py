@@ -1,13 +1,11 @@
 from requests import HTTPError
-
 from extract import fetch_competition, fetch_matches
+from transform import load_and_parse_matches
 from raw import save_raw
+from settings import COMPETITION_CODES, SEASONS
 
 
-def main():
-    competition_codes = ["PL", "BL1"]
-    seasons = [2023, 2024]
-
+def extract_phase(competition_codes, seasons):
     for code in competition_codes:
         try:
             competition_data = fetch_competition(code)
@@ -25,5 +23,26 @@ def main():
                     f"Error fetching data for {code} in season {season}: {http_err}")
 
 
+def transform_phase(competition_code, season):
+    matches = load_and_parse_matches(competition_code, season)
+    return matches
+
+
+def load_phase(matches):
+    return None
+
+
+def main(competition_codes, seasons):
+    extract_phase(competition_codes, seasons)
+
+    for competition_code in competition_codes:
+        for season in seasons:
+            try:
+                matches = transform_phase(competition_code, season)
+                # load_phase(matches)
+            except FileNotFoundError as e:
+                print(f"File {competition_code}_{season} not found")
+
+
 if __name__ == "__main__":
-    main()
+    main(COMPETITION_CODES, SEASONS)
