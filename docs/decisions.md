@@ -1,3 +1,45 @@
+## 2026-07-21 — PostgreSQL vía Docker Compose
+
+**Decisión**: levantar PostgreSQL como servicio de Docker Compose (`postgres:16`)
+en vez de instalarlo directamente en el sistema, con puerto mapeado a
+`${POSTGRES_PORT}` (no el 5432 estándar) y volumen nombrado para persistencia.
+
+**Por qué**:
+
+- **Reproducibilidad de versión**: cualquiera que clone el repo (yo dentro de un
+  año, un entrevistador) levanta exactamente la misma versión de Postgres con
+  `docker compose up`, sin depender de qué tenga instalado su sistema.
+- **Reset limpio**: durante desarrollo voy a recrear la base de datos muchas
+  veces (cambios de esquema, pruebas fallidas). `docker compose down -v` la
+  destruye limpiamente sin tocar el resto del sistema — algo mucho más
+  delicado de hacer con una instalación local.
+- **Portfolio evaluable con un comando**: el proyecto completo (stack incluido)
+  se levanta con `docker compose up`, sin que quien lo revise tenga que
+  instalar Postgres en su propia máquina.
+- **Paridad con producción**: en AWS voy a hablar con Postgres containerizado o
+  gestionado, no con una instalación manual en un SO — desarrollar ya sobre
+  contenedor acerca el entorno local al real.
+
+**Puerto no estándar (`${POSTGRES_PORT}`, no 5432)**: evita que choque con una
+posible instalación de Postgres directamente en el sistema, presente o futura.
+
+**Versión 16 en vez de 18**: Como es un proyecto sencillo y no necesito ninguna de las nuevas funcionalidades de Postgres 18 he optado por la 16 que será una versión mas estable y compatible con psycopg.
+
+---
+
+## 2026-07-21 — psycopg (SQL crudo) en vez de SQLAlchemy
+
+**Decisión**: usar `psycopg` con SQL escrito a mano para la capa de carga, en
+vez de un ORM como SQLAlchemy.
+
+**Por qué**: el objetivo declarado de este roadmap desde el principio es
+profundizar en SQL (joins, CTEs, window functions, optimización, planes de
+ejecución) — un ORM abstrae exactamente lo que quiero entrenar. Ya he usado
+SQLAlchemy en el trabajo sin explotar del todo sus ventajas; para este
+proyecto de aprendizaje pesa más escribir y entender SQL real en cada insert y
+consulta que la productividad que aportaría un mapeo objeto-relacional
+automático.
+
 ## 2026-07-14 — Propagar los bugs de programación
 
 **Decisión**: los bugs de programación deben propagarse y parar la ejecución, no esconderse detrás de un print o ser capturados en un bloque try catch
