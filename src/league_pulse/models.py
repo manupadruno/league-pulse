@@ -43,6 +43,18 @@ class Stage(str, Enum):
     relegation_round = "RELEGATION_ROUND"
 
 
+class CompetitionType(str, Enum):
+    league = "LEAGUE"
+
+
+class Competition(BaseModel):
+    id: int
+    name: str
+    type: CompetitionType
+    code: str
+    emblem: str
+
+
 class Team(BaseModel):
     id: int
     name: str
@@ -51,9 +63,18 @@ class Team(BaseModel):
     crest: str
 
 
-class Match(BaseModel):
+class Season(BaseModel):
     id: int
     competitionId: int
+    startDate: datetime
+    endDate: datetime
+    currentMatchday: int
+    winnerId: int | None
+
+
+class Match(BaseModel):
+    id: int
+    seasonId: int
     utcDate: datetime
     status: MatchStatus
     matchday: int | None
@@ -64,3 +85,34 @@ class Match(BaseModel):
     awayTeamId: int
     homeScore: int | None
     awayScore: int | None
+
+
+class Player(BaseModel):
+    id: int
+    name: str
+    firstName: str
+    lastName: str
+    dateOfBirth: datetime
+
+
+class Scorer(BaseModel):
+    playerId: int
+    seasonId: int
+    teamId: int
+    goals: int | None
+    assists: int | None
+    penalties: int | None
+
+
+class MatchdayClasification(BaseModel):
+    seasonId: int
+    teamId: int
+    matchday: int
+    points: int
+    wins: int
+    draws: int
+    losses: int
+    goalsFor: int
+    goalsAgainst: int
+    goalDifference: int
+    position: int
