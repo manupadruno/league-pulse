@@ -6,7 +6,7 @@ from extract import fetch_competition, fetch_matches, fetch_scorers
 from transform import load_and_parse_matches, load_and_parse_competition, load_and_parse_players, load_and_parse_scorers, load_and_parse_seasons, load_and_parse_teams, parse_season
 from raw import save_raw
 from settings import COMPETITION_CODES, SEASONS
-from load import get_connection, load_competition, load_matches, load_players, load_scorers, load_season, load_seasons, load_teams
+from load import get_connection, load_competition, load_matchday_clasification, load_matches, load_players, load_scorers, load_season, load_seasons, load_teams
 
 
 def extract_phase(competition_codes: list[str], seasons: list[int]):
@@ -60,6 +60,7 @@ def transform_and_load_phase(connection: psycopg.Connection, competition_codes: 
                 load_players(connection, players)
                 scorers = load_and_parse_scorers(competition_code, year)
                 load_scorers(connection, scorers)
+                load_matchday_clasification(connection, season.id)
 
             except FileNotFoundError as e:
                 print(f"File {competition_code}_{year} not found")

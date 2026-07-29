@@ -125,3 +125,93 @@ def load_scorers(connection: psycopg.Connection, scorers: list[Scorer]) -> None:
                  scorer.goals, scorer.assists, scorer.penalties)
             )
     connection.commit()
+
+
+def load_matchday_clasification(connection: psycopg.Connection, season_id: int) -> None:
+    with connection.cursor() as cur:
+        cur.execute(
+            "DELETE FROM matchday_clasification where season_id = %s", (season_id,))
+        cur.execute(
+            """
+            with home_teams as (select 
+                s.id as season_id,
+                m.id as match_id,
+                t_home.id as team_id,
+                m.matchday,
+                m.home_score as scored_goals,
+                m.away_score as recieved_goals
+            from match m 
+            inner join season s on m.season_id = s.id
+            inner join team t_home on m.home_team_id = t_home.id
+            inner join team t_away on m.away_team_id = t_away.id
+            where s.id = %s
+            order by matchday),
+            away_teams as (select 
+                s.id as season_id,
+                m.id as match_id,
+                t_away.id as team_id,
+                m.matchday,
+                m.away_score as scored_goals,
+                m.home_score as recieved_goals
+            from match m 
+            inner join season s on m.season_id = s.id
+            inner join team t_home on m.home_team_id = t_home.id
+            inner join team t_away on m.away_team_id = t_away.id
+            where s.id = %s
+            order by matchday),
+            all_teams_matchdays as (
+             select * from home_teams
+             union all 
+             select * from away_teams),
+             matches_points as (
+             select 
+             atm.*,
+             case
+             	when scored_goals > recieved_goals then 3
+             	when scored_goals = recieved_goals then 1
+             	else 0
+             end as points,
+             case
+             	when scored_goals > recieved_goals then 1
+             	else 0
+             end as wins,
+             case
+             	when scored_goals = recieved_goals then 1
+             	else 0
+             end as draws,
+             case
+             	when scored_goals < recieved_goals then 1
+             	else 0
+             end as losses
+            from all_teams_matchdays atm),
+            sum_points_and_goals as (
+            select
+            mp.*,
+            SUM(points) over (partition by team_id order by matchday) as total_points,
+            SUM(scored_goals) over (partition by team_id order by matchday) as total_scored_goals,
+            SUM(recieved_goals) over (partition by team_id order by matchday) as total_recieved_goals,
+            SUM(wins) over (partition by team_id order by matchday) as total_wins,
+            SUM(draws) over (partition by team_id order by matchday) as total_draws,
+            SUM(losses) over (partition by team_id order by matchday) as total_losses
+            from matches_points mp),
+            sum_with_goal_difference as (
+            select
+             spag.*,
+             total_scored_goals - total_recieved_goals as goal_difference
+            from sum_points_and_goals spag)
+            insert into matchday_clasification (season_id, team_id, matchday, points, wins, draws, losses, goals_for, goals_against, position)
+            select
+            swgd.season_id,
+            swgd.team_id,
+            swgd.matchday,
+            swgd.total_points as points,
+            swgd.total_wins as wins,
+            swgd.total_draws as draws,
+            swgd.total_losses as losses,
+            swgd.total_scored_goals as goals_for,
+            swgd.total_recieved_goals as goals_against,
+            RANK() over (partition by matchday order by total_points desc, goal_difference desc) as position
+            from sum_with_goal_difference swgd
+            """, (season_id, season_id)
+        )
+    connection.commit()
