@@ -13,3 +13,8 @@ def require_env(name):
 
 API_TOKEN = require_env("FOOTBALL_DATA_API_TOKEN")
 BASE_URL = require_env("FOOTBALL_DATA_BASE_URL")
+POSTGRES_HOST = require_env("POSTGRES_HOST")
+POSTGRES_PORT = require_env("POSTGRES_PORT")
+POSTGRES_USER = require_env("POSTGRES_USER")
+POSTGRES_PASSWORD = require_env("POSTGRES_PASSWORD")
+POSTGRES_DB = require_env("POSTGRES_DB")
