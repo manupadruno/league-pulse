@@ -1,11 +1,15 @@
+from datetime import datetime
+
+import psycopg
 from requests import HTTPError
-from extract import fetch_competition, fetch_matches
-from transform import load_and_parse_matches
+from extract import fetch_competition, fetch_matches, fetch_scorers
+from transform import load_and_parse_matches, load_and_parse_competition, load_and_parse_players, load_and_parse_scorers, load_and_parse_seasons, load_and_parse_teams, parse_season
 from raw import save_raw
 from settings import COMPETITION_CODES, SEASONS
+from load import get_connection, load_competition, load_matches, load_players, load_scorers, load_season, load_seasons, load_teams
 
 
-def extract_phase(competition_codes, seasons):
+def extract_phase(competition_codes: list[str], seasons: list[int]):
     for code in competition_codes:
         try:
             competition_data = fetch_competition(code)
@@ -18,30 +22,62 @@ def extract_phase(competition_codes, seasons):
             try:
                 match_data = fetch_matches(code, season)
                 save_raw(match_data, "matches", f"{code}_{season}")
+                scorers_data = fetch_scorers(code, season)
+                save_raw(scorers_data, "scorers", f"{code}_{season}")
             except HTTPError as http_err:
                 print(
                     f"Error fetching data for {code} in season {season}: {http_err}")
 
 
-def transform_phase(competition_code, season):
-    matches = load_and_parse_matches(competition_code, season)
-    return matches
-
-
-def load_phase(matches):
-    return None
-
-
-def main(competition_codes, seasons):
-    extract_phase(competition_codes, seasons)
-
+def transform_and_load_phase(connection: psycopg.Connection, competition_codes: list[str], years: list[int]):
     for competition_code in competition_codes:
-        for season in seasons:
+        try:
+            competition = load_and_parse_competition(competition_code)
+            load_competition(connection, competition)
+
+            competition_seasons = load_and_parse_seasons(
+                competition_code, years)
+
+        except FileNotFoundError as e:
+            print(f"File {competition_code} not found, error {e}")
+            continue
+
+        for year in years:
             try:
-                matches = transform_phase(competition_code, season)
-                # load_phase(matches)
+                teams = load_and_parse_teams(competition_code, year)
+                load_teams(connection, teams)
+                season = next(
+                    (s for s in competition_seasons if s.startDate.year == year), None)
+
+                if season is None:
+                    print(
+                        f"No season found for {competition_code} in year {year}, skipping")
+                    continue
+                load_season(connection, season)
+                matches = load_and_parse_matches(competition_code, year)
+                load_matches(connection, matches)
+                players = load_and_parse_players(competition_code, year)
+                load_players(connection, players)
+                scorers = load_and_parse_scorers(competition_code, year)
+                load_scorers(connection, scorers)
+
             except FileNotFoundError as e:
-                print(f"File {competition_code}_{season} not found")
+                print(f"File {competition_code}_{year} not found")
+                continue
+            except psycopg.IntegrityError as e:
+                connection.rollback()
+                print(
+                    f"Integrity error loading data for {competition_code} in year {year}: {e}")
+                continue
+
+
+def main(competition_codes: list[str], seasons: list[int]):
+    conn = get_connection()
+    try:
+        # extract_phase(competition_codes, seasons)
+        transform_and_load_phase(conn, competition_codes, seasons)
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":
