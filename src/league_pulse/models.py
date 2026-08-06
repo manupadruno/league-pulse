@@ -116,3 +116,16 @@ class MatchdayClasification(BaseModel):
     goalsAgainst: int
     goalDifference: int
     position: int
+
+
+class Standing(BaseModel):
+    position: int
+    teamId: int
+    playedGames: int
+    won: int
+    draw: int
+    lost: int
+    points: int
+    goalsFor: int
+    goalsAgainst: int
+    goalDifference: int
