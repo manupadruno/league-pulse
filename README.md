@@ -72,7 +72,7 @@ Python · PostgreSQL · Docker Compose · Yoyo (migrations) · Pydantic · psyco
 - Each pipeline phase (extract / transform / load / validate) is independently
   runnable and independently fails without cascading
 
-Full rationale for every decision in [`DECISIONS.md`](./DECISIONS.md).
+Full rationale for every decision in [`DECISIONS.md`](./docs/DECISIONS.md).
 
 ## Known limitations
 
