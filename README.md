@@ -1,98 +1,104 @@
 # league-pulse
 
-Pipeline de datos que extrae, procesa y modela información de competiciones de fútbol
-a partir de la API pública de [football-data.org](https://www.football-data.org/), con el
-objetivo de construir la evolución de la clasificación de una liga a lo largo de una
-temporada (snapshot por jornada).
+End-to-end batch data pipeline that extracts football match data, computes league
+standings from scratch using SQL window functions, and cross-validates the result
+against the official standings API.
 
-Proyecto personal de aprendizaje orientado a Data Engineering: pipeline batch de extremo
-a extremo, con foco en buenas prácticas de ingeniería (arquitectura por capas,
-configuración centralizada, control de versiones, calidad de datos) más que en la
-complejidad del dominio.
+Built as a portfolio project to demonstrate production-grade data engineering
+practices — not just moving data from A to B, but designing, validating, and
+reasoning about a system end to end.
 
-## Objetivo funcional
+## Highlights
 
-Dada una competición y temporada, reconstruir y consultar cómo evolucionó la
-clasificación jornada a jornada, a partir de los resultados de los partidos.
+- **Full pipeline**: extract → raw storage → transform → load → derived computation → validation
+- **Standings computed from raw match data**, not fetched — using CTEs and window
+  functions (`SUM() OVER`, `RANK()`) to build cumulative points, goal difference and
+  position, matchday by matchday
+- **Cross-validated against the official API**: 0 discrepancies across two full
+  Premier League seasons (2023/24, 2024/25)
+- **Type-safe throughout**: every entity is a validated Pydantic model, from raw JSON
+  to database row
+- **Idempotent by design**: upserts (`ON CONFLICT`), isolated failure handling per
+  unit of work — one bad record never takes down the rest
+- **Dockerized PostgreSQL** with versioned, reviewable SQL migrations (Yoyo)
 
-## Arquitectura
+## Architecture
 
-Pipeline batch con arquitectura por capas (medallion-style):
+```
+football-data.org API
+        │
+        ▼
+   extract  ──► raw JSON on disk (schema-on-read, immutable, replayable)
+        │
+        ▼
+   transform ──► typed Pydantic models (Competition, Team, Season, Match, Player, Scorer)
+        │
+        ▼
+     load    ──► PostgreSQL (upsert, FK-consistent load order)
+        │
+        ▼
+  clasificacion_jornada ──► computed via SQL window functions from `match`
+        │
+        ▼
+   validate  ──► compared against official /standings endpoint
+```
 
-- **Raw**: respuestas crudas de la API, guardadas tal cual en disco (JSON), sin transformar.
-- **Silver/Gold** _(próximas fases)_: datos limpios, validados y cargados en PostgreSQL,
-  listos para análisis.
+## Data model
 
-## Modelo de datos
+| Table                    | Purpose                                                          |
+| ------------------------ | ---------------------------------------------------------------- |
+| `competition`            | League metadata                                                  |
+| `team`                   | Teams (deduplicated across matches)                              |
+| `season`                 | One row per competition-year, own lifecycle                      |
+| `match`                  | Match facts: two FKs to `team` (home/away), no bridge table      |
+| `player`, `scorer`       | Top scorers per season (N:1 player → scorer)                     |
+| `matchday_clasification` | Derived standings snapshot, one row per (season, team, matchday) |
 
-**Entidades base (persistentes)**
-| Tabla | Descripción |
-|---|---|
-| `competiciones` | id, nombre, país, código (ej. `PD` = LaLiga) |
-| `temporadas` | id, competicion_id, año, fecha_inicio, fecha_fin |
-| `equipos` | id, nombre, país, escudo |
-| `jugadores` | id, nombre, fecha_nacimiento, nacionalidad |
+Full schema, FK constraints and `ON DELETE` policies live in `migrations/`.
 
-**Hechos**
-| Tabla | Descripción |
-|---|---|
-| `partidos` | id, temporada_id, equipo_local_id, equipo_visitante_id, fecha, estado, goles_local, goles_visitante |
-| `scorers` | id, jugador_id, temporada_id, equipo_id, goles, asistencias, penaltis (N:1 con jugador) |
+## Tech stack
 
-**Snapshot periódico (derivado)**
-| Tabla | Descripción |
-|---|---|
-| `clasificacion_jornada` | temporada_id, jornada, equipo_id, puntos, victorias, empates, derrotas, gf, gc, posición |
+Python · PostgreSQL · Docker Compose · Yoyo (migrations) · Pydantic · psycopg3 · uv · requests
 
-Relaciones clave: `competiciones 1—N temporadas`, `temporadas 1—N partidos`,
-`equipos` referenciado dos veces desde `partidos` (local/visitante, en vez de tabla
-puente, ver decisiones de diseño).
+## Key engineering decisions
 
-## Stack técnico
+- Raw layer stored as JSON, not SQL — schema-on-read tolerates upstream API changes
+  without breaking the pipeline
+- `RANK()` over `ROW_NUMBER()` for standings position — the system doesn't implement
+  head-to-head tiebreakers, so tied teams are reported as tied rather than given an
+  arbitrary order
+- No bridge table for `team` ↔ `competition` — the relationship is fully derivable
+  from `match`, avoiding redundant state
+- Each pipeline phase (extract / transform / load / validate) is independently
+  runnable and independently fails without cascading
 
-- **Python 3** con **uv** para gestión de dependencias y entorno.
-- **requests** para el cliente HTTP.
-- **PostgreSQL** _(próxima fase)_ para las capas silver/gold.
-- **Docker / Airflow / AWS** _(fases posteriores)_.
+Full rationale for every decision in [`DECISIONS.md`](./DECISIONS.md).
 
-## Decisiones de diseño (con motivo)
+## Known limitations
 
-- **uv en vez de pip/venv**: lockfile determinista y gestión de dependencias más rápida
-  y moderna; estándar cada vez más adoptado en 2026.
-- **Capa raw en JSON, no en PostgreSQL**: la respuesta de la API es semi-estructurada y
-  puede cambiar de forma. JSON es schema-on-read: tolera cambios de esquema sin romper
-  el pipeline. Postgres impondría schema-on-write y fallaría o ignoraría campos nuevos.
-- **`equipo_local_id` / `equipo_visitante_id` como dos FK en `partidos`, en vez de tabla
-  puente**: la relación es siempre exactamente 2 (nunca variable), así que una tabla
-  puente añadiría complejidad (habría que guardar además si es local o visitante) sin
-  aportar nada que dos columnas no resuelvan directamente.
-- **`competiciones` y `temporadas` separadas**: tienen ciclos de vida distintos (la
-  competición es estable, la temporada cambia cada año) — mismo principio de slowly
-  changing dimensions aplicado a jugadores/clubes.
-- **`data/` fuera de git**: por privacidad, por peso del repositorio, y porque git no
-  está diseñado para versionar datos que cambian constantemente.
+- Free-tier API access: limited competitions, 3-year match history, 10 calls/minute
+- Standings position may legitimately differ from the official table when teams are
+  tied on points and goal difference (head-to-head not implemented — see above)
 
-## Restricciones API gratuita
-
-- **competiciones disponibles**: La API gratuita de [football-data.org](https://www.football-data.org/) solo da acceso a las competiciones mas importantes.
-- **registro histórico**: La API gratuita de [football-data.org](https://www.football-data.org/) solo da acceso a los partidos de los últimos 3 años.
-
-## Estado actual
-
-- [x] Modelado de entidades y relaciones.
-- [x] Entorno del proyecto (uv, estructura de carpetas, `.env`).
-- [x] `config.py` con carga de variables y fail-fast.
-- [x] Extracción de datos (`extract.py`).
-- [x] Persistencia de la capa raw (`raw.py`).
-- [ ] Transformación y carga a PostgreSQL.
-- [ ] Orquestación con Airflow.
-- [ ] Despliegue en AWS.
-
-## Cómo ejecutarlo
+## Getting started
 
 ```bash
 git clone <repo-url>
 cd league-pulse
 uv sync
-cp .env.example .env  # rellenar con tu token de football-data.org
+cp .env.example .env        # fill in your football-data.org token and Postgres creds
+docker compose up -d
+uv run yoyo apply
+uv run src/league_pulse/main.py
 ```
+
+## Status
+
+- [x] Extraction, raw storage, transformation (all entities)
+- [x] PostgreSQL schema with versioned migrations
+- [x] Load pipeline with upsert + isolated error handling
+- [x] Standings computation (window functions)
+- [x] Cross-validation against official API
+- [ ] Airflow orchestration
+- [ ] Containerized application (currently only Postgres runs in Docker)
+- [ ] AWS deployment
