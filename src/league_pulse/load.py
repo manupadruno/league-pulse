@@ -1,6 +1,7 @@
 import psycopg
 from config import POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
 from models import Competition, Match, Player, Scorer, Season, Team
+from psycopg.rows import dict_row
 
 
 def get_connection():
@@ -9,7 +10,8 @@ def get_connection():
         port=POSTGRES_PORT,
         user=POSTGRES_USER,
         password=POSTGRES_PASSWORD,
-        dbname=POSTGRES_DB
+        dbname=POSTGRES_DB,
+        row_factory=dict_row
     )
 
 
