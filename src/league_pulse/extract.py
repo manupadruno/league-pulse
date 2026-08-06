@@ -65,3 +65,26 @@ def fetch_scorers(competition_code: str, season: int) -> dict:
     response.raise_for_status()  # Raise an error for bad responses (4xx or 5xx)
 
     return response.json()
+
+
+def fetch_standings(competition_code: str, season: int, matchday: int | None = None) -> dict:
+    """
+    Fetches scorers data for a specific competition from the football-data.org API.
+
+    Args:
+        competition_code (str): The competition code (e.g., 'PL' for Premier League).
+        season (int): The season for which to fetch match data.
+
+
+    Returns:
+        dict: A dictionary containing the scorers (and players) data.
+    """
+
+    url = f"{BASE_URL}/competitions/{competition_code}/standings"
+    headers = {"X-Auth-Token": API_TOKEN}
+    payload = {"season": season, "matchday": matchday}
+    response = requests.get(url, headers=headers, params=payload)
+
+    response.raise_for_status()  # Raise an error for bad responses (4xx or 5xx)
+
+    return response.json()
