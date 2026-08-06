@@ -1,4 +1,4 @@
-from models import Match, MatchStatus, Player, Scorer, Team, Competition, Season
+from models import Match, MatchStatus, Player, Scorer, Standing, Team, Competition, Season
 from raw import load_raw
 from datetime import datetime
 
@@ -145,3 +145,26 @@ def load_and_parse_scorers(competition_code: str, year: int) -> list[Scorer]:
     season_id = raw_dict["season"]["id"]
     scorers = raw_dict["scorers"]
     return parse_scorers(scorers, season_id)
+
+
+def parse_standing(raw_team_standing: dict) -> Standing:
+    return Standing(
+        position=raw_team_standing["position"],
+        teamId=raw_team_standing["team"]["id"],
+        playedGames=raw_team_standing["playedGames"],
+        won=raw_team_standing["won"],
+        draw=raw_team_standing["draw"],
+        lost=raw_team_standing["lost"],
+        points=raw_team_standing["points"],
+        goalsFor=raw_team_standing["goalsFor"],
+        goalsAgainst=raw_team_standing["goalsAgainst"],
+        goalDifference=raw_team_standing["goalDifference"]
+    )
+
+
+def parse_standings(raw_response: dict) -> list[Standing]:
+    stage_tables = raw_response["standings"]
+    total_table = next(
+        (stage_table for stage_table in stage_tables if stage_table["type"] == "TOTAL"), {})
+    team_rows = total_table["table"]
+    return [parse_standing(row) for row in team_rows]
